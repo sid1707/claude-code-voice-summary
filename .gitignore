@@ -1,0 +1,11 @@
+# Never commit personal settings, keys or downloaded voice models
+voice-config.json
+*.onnx
+voices-*.bin
+*.wav
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.zip
