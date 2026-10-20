@@ -128,6 +128,7 @@ function Invoke-Speak([string]$text) {
     try {
         # One summary at a time: wait for any summary that's still playing.
         try { $haveLock = $mutex.WaitOne(180000) } catch [System.Threading.AbandonedMutexException] { $haveLock = $true }
+        if (-not $haveLock) { Write-Log '  previous summary still playing after 3 minutes; speaking anyway' }
         Invoke-VoiceSpeak $text
     } finally {
         if ($haveLock) { $mutex.ReleaseMutex() }
@@ -135,41 +136,69 @@ function Invoke-Speak([string]$text) {
     }
 }
 
+function Get-NotificationSpeech([string]$kind) {
+    switch ($kind) {
+        'permission_prompt'      { return 'Claude is waiting for your permission to continue.' }
+        'elicitation_dialog'     { return 'Claude needs you to fill something in before it can continue.' }
+        'elicitation_url_dialog' { return 'Claude needs you to open a link before it can continue.' }
+        'agent_needs_input'      { return 'Claude is waiting for your input.' }
+        default                  { return 'Claude needs your attention.' }
+    }
+}
+
 try {
     if ($env:VOICE_SUMMARY_CHILD -eq '1') { exit 0 }   # the helper summary run itself
-    if (Test-Path $OffFlag) { exit 0 }                 # turned off with /voice-off
+    if (Test-Path $OffFlag) { Write-Log 'muted (/voice-off), nothing spoken'; exit 0 }
 
     $reader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), $Utf8)
     $raw = $reader.ReadToEnd()
-    if (-not $raw.Trim()) { exit 0 }
+    if (-not $raw.Trim()) { Write-Log 'no input from Claude Code, nothing spoken'; exit 0 }
     $data = $raw | ConvertFrom-Json
+    $eventName = [string]$data.hook_event_name
+
+    # Claude stopped part-way to ask for permission or input: a "Stop" never comes for that moment.
+    if ($eventName -eq 'Notification') {
+        $kind = [string]$data.notification_type
+        Write-Log ("Notification ({0}): {1}" -f $kind, [string]$data.message)
+        Invoke-Speak (Get-NotificationSpeech $kind)
+        Write-Log ("  spoke the alert using {0}" -f $script:LastVoiceEngine)
+        exit 0
+    }
+
     $message = [string]$data.last_assistant_message
-    if ([string]::IsNullOrWhiteSpace($message)) { exit 0 }
+    if ([string]::IsNullOrWhiteSpace($message)) { Write-Log 'Stop: the reply had no text, nothing spoken'; exit 0 }
 
     $spoken = $null
+    $source = ''
     # The last line that starts with "In plain words" (the heading), and everything after it.
     $plain = [regex]::Match($message, '^\W*in plain words\W*',
         [System.Text.RegularExpressions.RegexOptions]'IgnoreCase, Multiline, RightToLeft')
     if ($plain.Success) {
         $spoken = ConvertTo-SpeakableText $message.Substring($plain.Index + $plain.Length)
+        $source = 'the In plain words recap'
     }
     if (-not $spoken) {
         $clean = ConvertTo-SpeakableText $message
         if ($clean.Length -le 300) {
             $spoken = $clean
+            $source = 'the short reply itself'
         } else {
             $summary = Get-HaikuSummary $message
             if ($summary) {
                 $spoken = ConvertTo-SpeakableText $summary
+                $source = 'a Haiku summary'
             } else {
                 $spoken = 'Claude has replied. It begins: ' + (Get-FirstSentences $clean 280)
+                $source = 'the first sentences (no recap, no Haiku)'
             }
         }
     }
-    if (-not $spoken) { exit 0 }
+    if (-not $spoken) { Write-Log 'Stop: nothing speakable in the reply'; exit 0 }
 
     try { [System.IO.File]::WriteAllText($LastFile, $spoken, $Utf8) } catch {}
+    Write-Log ("Stop: speaking {0} characters from {1}" -f $spoken.Length, $source)
     Invoke-Speak $spoken
+    Write-Log ("  done, using {0}" -f $script:LastVoiceEngine)
 } catch {
     Write-Log ("error: " + $_.Exception.Message)
 }

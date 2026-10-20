@@ -38,18 +38,39 @@ function Save-Settings($obj) {
     [System.IO.File]::WriteAllText($Settings, $json, $Utf8)
 }
 
+# The Claude Code events this add-on listens to.
+$OurEvents = @('Stop', 'Notification')
+# Notification types worth an alert: Claude has stopped part-way and is waiting for you.
+$AlertTypes = 'permission_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input'
+
 function Remove-OurHook($obj) {
-    if ($obj.PSObject.Properties['hooks'] -and $obj.hooks -and $obj.hooks.PSObject.Properties['Stop']) {
-        $kept = @($obj.hooks.Stop | Where-Object {
+    if (-not ($obj.PSObject.Properties['hooks'] -and $obj.hooks)) { return }
+    foreach ($ev in $OurEvents) {
+        if (-not $obj.hooks.PSObject.Properties[$ev]) { continue }
+        $kept = @($obj.hooks.$ev | Where-Object {
             -not (($_ | ConvertTo-Json -Depth 20 -Compress) -match 'speak-summary\.ps1')
         })
         if ($kept.Count -gt 0) {
-            $obj.hooks | Add-Member -NotePropertyName Stop -NotePropertyValue $kept -Force
+            $obj.hooks | Add-Member -NotePropertyName $ev -NotePropertyValue $kept -Force
         } else {
-            $obj.hooks.PSObject.Properties.Remove('Stop')
+            $obj.hooks.PSObject.Properties.Remove($ev)
         }
-        if (@($obj.hooks.PSObject.Properties).Count -eq 0) { $obj.PSObject.Properties.Remove('hooks') }
     }
+    if (@($obj.hooks.PSObject.Properties).Count -eq 0) { $obj.PSObject.Properties.Remove('hooks') }
+}
+
+function New-OurHookEntry([string]$matcher) {
+    $props = [ordered]@{}
+    if ($matcher) { $props['matcher'] = $matcher }
+    $props['hooks'] = @(
+        (New-Object PSObject -Property ([ordered]@{
+            type    = 'command'
+            command = 'powershell.exe'
+            args    = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $HookScript)
+            async   = $true
+        }))
+    )
+    return (New-Object PSObject -Property $props)
 }
 
 try {
@@ -112,22 +133,16 @@ try {
     # 2. Turn on the style and the voice hook in settings.json (keeping everything else)
     $cfg = Read-Settings
     Remove-OurHook $cfg
-    $entry = New-Object PSObject -Property @{
-        hooks = @(
-            (New-Object PSObject -Property ([ordered]@{
-                type    = 'command'
-                command = 'powershell.exe'
-                args    = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $HookScript)
-                async   = $true
-            }))
-        )
-    }
     if (-not $cfg.PSObject.Properties['hooks'] -or -not $cfg.hooks) {
         $cfg | Add-Member -NotePropertyName hooks -NotePropertyValue (New-Object PSObject) -Force
     }
-    $existing = @()
-    if ($cfg.hooks.PSObject.Properties['Stop']) { $existing = @($cfg.hooks.Stop) }
-    $cfg.hooks | Add-Member -NotePropertyName Stop -NotePropertyValue (@($existing) + $entry) -Force
+    foreach ($ev in $OurEvents) {
+        $matcher = ''
+        if ($ev -eq 'Notification') { $matcher = $AlertTypes }
+        $existing = @()
+        if ($cfg.hooks.PSObject.Properties[$ev]) { $existing = @($cfg.hooks.$ev) }
+        $cfg.hooks | Add-Member -NotePropertyName $ev -NotePropertyValue (@($existing) + (New-OurHookEntry $matcher)) -Force
+    }
 
     if ($cfg.PSObject.Properties['outputStyle'] -and $cfg.outputStyle -and $cfg.outputStyle -ne $StyleName) {
         Say ("  Note: your previous output style was '" + $cfg.outputStyle + "'. Switching to Plain Words.") 'Yellow'
