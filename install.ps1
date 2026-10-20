@@ -109,7 +109,7 @@ try {
         exit 0
     }
 
-    Say 'Installing Plain Words + voice summaries for Claude Code (version 1.1)...' 'Cyan'
+    Say 'Installing Plain Words + voice summaries for Claude Code (version 1.1.2)...' 'Cyan'
 
     # Running straight from inside a zip only extracts this one file, so the others are missing.
     $needed = 'speak-summary.ps1', 'voice-engines.ps1', 'choose-voice.ps1', 'setup-kokoro.ps1', 'kokoro-speak.py', 'plain-words.md'

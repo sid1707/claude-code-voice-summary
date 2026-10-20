@@ -3,8 +3,9 @@ kokoro-speak.py - turns text into speech with the free, open-source Kokoro voice
 Used by the Claude Code voice summaries (voice-engines.ps1). Runs fully on this PC.
 
 Reads the text from standard input (UTF-8), then either:
-  --play       speaks it through the speakers (Windows), starting with the first
-               sentence while the next ones are being prepared, or
+  --stream     writes each sentence as a WAV to standard output as soon as it is
+               ready (used by the voice summaries: PowerShell plays them),
+  --play       speaks it through the speakers itself (Windows), or
   --out FILE   saves it all as one WAV file.
 
 Example:
@@ -58,6 +59,8 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--play", action="store_true", help="speak through the speakers")
     group.add_argument("--out", help="save to this WAV file instead")
+    group.add_argument("--stream", action="store_true",
+                       help="write each sentence as a WAV to standard output, for another program to play")
     args = parser.parse_args()
 
     text = sys.stdin.buffer.read().decode("utf-8", errors="replace").strip()
@@ -75,6 +78,20 @@ def main() -> int:
 
     def synth(chunk):
         return kokoro.create(chunk, voice=args.voice, speed=speed, lang=lang)
+
+    if args.stream:
+        # Each sentence goes out as soon as it is ready: a 4-byte length (little-endian), then a WAV.
+        # The caller (voice-engines.ps1) plays them, so the sound comes from PowerShell, not Python.
+        import struct
+        out = sys.stdout.buffer
+        for chunk in split_sentences(text):
+            samples, rate = synth(chunk)
+            silence = np.zeros(int(rate * PAUSE_SECONDS), dtype=np.float32)
+            wav = to_wav_bytes(np.concatenate([samples, silence]), rate, np)
+            out.write(struct.pack("<I", len(wav)))
+            out.write(wav)
+            out.flush()
+        return 0
 
     if args.out:
         samples, rate = synth(text)
