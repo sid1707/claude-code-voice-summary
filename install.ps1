@@ -109,7 +109,18 @@ try {
         exit 0
     }
 
-    Say 'Installing Plain Words + voice summaries for Claude Code...' 'Cyan'
+    Say 'Installing Plain Words + voice summaries for Claude Code (version 1.1.2)...' 'Cyan'
+
+    # Running straight from inside a zip only extracts this one file, so the others are missing.
+    $needed = 'speak-summary.ps1', 'voice-engines.ps1', 'choose-voice.ps1', 'setup-kokoro.ps1', 'kokoro-speak.py', 'plain-words.md'
+    $missing = @($needed | Where-Object { -not (Test-Path (Join-Path $Here $_)) })
+    if ($missing.Count -gt 0) {
+        Say ''
+        Say ('  Some files are missing next to the installer: ' + ($missing -join ', ')) 'Red'
+        Say '  This usually means install.bat was opened from inside the zip without unzipping it.' 'Yellow'
+        Say '  Right-click the zip > Extract All..., open the extracted folder, and run install.bat from there.' 'Yellow'
+        exit 1
+    }
 
     # 1. Copy the files into your .claude folder
     New-Item -ItemType Directory -Force -Path $HookDir, $StyleDir | Out-Null
@@ -168,13 +179,21 @@ try {
     }
 
     # 4. Test the voice
-    Say '  Testing the voice now - you should hear it in your headphones.'
     try {
         . (Join-Path $HookDir 'voice-engines.ps1')
+        $chosen = Get-CfgValue (Get-VoiceConfig) 'engine' 'windows'
+        Say ("  Testing your voice ($chosen) now - you should hear it in your headphones.")
+        if ($chosen -eq 'kokoro') { Say '  (Kokoro takes 5 to 15 seconds to start speaking. Please wait.)' 'DarkGray' }
+        $logLines = 0
+        if (Test-Path $script:VoiceLogPath) { $logLines = @(Get-Content $script:VoiceLogPath).Count }
         Invoke-VoiceSpeak 'Voice summaries are ready.'
+        Say ("  Test played using: " + $script:LastVoiceEngine)
+        if ((Test-Path $script:VoiceLogPath) -and @(Get-Content $script:VoiceLogPath).Count -gt $logLines) {
+            Say ('  Note: ' + (Get-Content $script:VoiceLogPath -Tail 1)) 'Yellow'
+        }
     } catch {
         Say ('  Could not play the test sound: ' + $_.Exception.Message) 'Yellow'
-        Say '  Everything else is installed. Check your speakers or headphones.' 'Yellow'
+        Say '  Everything else is installed. Check your speakers or headphones, then run check-voice.bat.' 'Yellow'
     }
 
     Write-Host ''

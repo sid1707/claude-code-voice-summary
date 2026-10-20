@@ -197,6 +197,25 @@ function Invoke-ProgramWithInput([string]$exe, [string]$arguments, [string]$inpu
     return @{ ExitCode = $proc.ExitCode; StdOut = $outTask.Result; StdErr = $errTask.Result }
 }
 
+# Reads exactly $count bytes, or returns $null at the end of the stream. Gives up after $timeoutSeconds.
+function Read-StreamBytes([System.IO.Stream]$stream, [int]$count, [int]$timeoutSeconds) {
+    $buf = New-Object byte[] $count
+    $got = 0
+    while ($got -lt $count) {
+        $task = $stream.ReadAsync($buf, $got, $count - $got)
+        if (-not $task.Wait($timeoutSeconds * 1000)) { throw "Kokoro stopped responding (no audio for $timeoutSeconds seconds)" }
+        if ($task.Result -le 0) {
+            if ($got -eq 0) { return $null }
+            throw 'Kokoro audio was cut off part-way'
+        }
+        $got += $task.Result
+    }
+    return ,$buf
+}
+
+# Kokoro (in Python) only makes the speech; PowerShell plays it, one sentence at a time.
+# Playing from Python itself can be silent on some PCs, where Windows routes or mutes
+# Python's sound differently from PowerShell's.
 function Invoke-KokoroSpeech([string]$text, $cfg) {
     if (-not (Test-KokoroReady)) { throw 'Kokoro is not set up yet. Run choose-voice.bat and pick Kokoro.' }
     $p     = Get-KokoroPaths
@@ -204,9 +223,43 @@ function Invoke-KokoroSpeech([string]$text, $cfg) {
     $speed = Get-CfgValue $cfg 'kokoro_speed' '1.0'
     if ($voice -notmatch '^[a-z]{2}_[a-z]+$') { $voice = 'af_heart' }
     if ($speed -notmatch '^\d(\.\d+)?$') { $speed = '1.0' }
-    $arguments = '"{0}" --model "{1}" --voices "{2}" --voice {3} --speed {4} --play' -f $p.Script, $p.Model, $p.Voices, $voice, $speed
-    $r = Invoke-ProgramWithInput $p.Python $arguments $text 300
-    if ($r.ExitCode -ne 0) { throw ('Kokoro failed: ' + ($r.StdErr.Trim() -split "`n")[-1]) }
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName               = $p.Python
+    $psi.Arguments              = '"{0}" --model "{1}" --voices "{2}" --voice {3} --speed {4} --stream' -f $p.Script, $p.Model, $p.Voices, $voice, $speed
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+    $psi.RedirectStandardInput  = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.StandardErrorEncoding  = $script:VoiceUtf8
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $errTask = $proc.StandardError.ReadToEndAsync()
+    $bytes = $script:VoiceUtf8.GetBytes($text)
+    $proc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $proc.StandardInput.Close()
+
+    $out = $proc.StandardOutput.BaseStream
+    $played = 0
+    try {
+        while ($true) {
+            $head = Read-StreamBytes $out 4 120
+            if ($null -eq $head) { break }
+            $size = [BitConverter]::ToInt32($head, 0)
+            if ($size -le 44 -or $size -gt 100MB) { throw "Kokoro sent unexpected data ($size bytes)" }
+            $wav = Read-StreamBytes $out $size 60
+            if ($null -eq $wav) { throw 'Kokoro audio was cut off part-way' }
+            Invoke-WavPlayback $wav
+            $played++
+        }
+    } finally {
+        if (-not $proc.WaitForExit(30000)) { try { $proc.Kill() } catch {} }
+    }
+    if ($played -eq 0) {
+        $err = ''
+        try { $err = ($errTask.Result.Trim() -split "`n")[-1] } catch {}
+        throw ('Kokoro failed: ' + $err)
+    }
 }
 
 function Invoke-WindowsSpeech([string]$text, $cfg) {
