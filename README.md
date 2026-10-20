@@ -2,6 +2,10 @@
 
 **Hear what Claude Code just did, in plain words.**
 
+[![Latest release](https://img.shields.io/github/v/release/sid1707/claude-code-voice-summary)](https://github.com/sid1707/claude-code-voice-summary/releases/latest)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)
+[![License: MIT](https://img.shields.io/github/license/sid1707/claude-code-voice-summary)](LICENSE)
+
 Claude Code writes long, technical replies. If you're building something but you aren't a programmer, reading every reply takes time, and much of it is jargon. This add-on fixes that:
 
 1. **Plain Words**: Claude Code keeps coding exactly as before, but ends every reply with a short **"In plain words"** recap anyone can understand.
@@ -27,6 +31,7 @@ Choose from four voices, including **Kokoro**, a free, open-source voice that so
 - [Privacy and cost](#privacy-and-cost)
 - [Customising](#customising)
 - [Troubleshooting](#troubleshooting)
+- [Updating](#updating)
 - [Uninstall](#uninstall)
 - [Limitations](#limitations)
 - [Credits and licences](#credits-and-licences)
@@ -51,11 +56,11 @@ Choose from four voices, including **Kokoro**, a free, open-source voice that so
 
 ## Install in 5 minutes
 
-1. **Download.** On this page, click the green **Code** button, then **Download ZIP**. (Or download the zip from the [Releases](../../releases) page.)
-2. **Unzip** it anywhere, for example on your Desktop.
-3. **Double-click `install.bat`.**
+1. **Download.** Open the [latest release](https://github.com/sid1707/claude-code-voice-summary/releases/latest) and download the `.zip` file under **Assets**. (Or click the green **Code** button on this page, then **Download ZIP**.)
+2. **Unzip it.** Right-click the zip, choose **Extract All…**, then **Extract**. Don't run anything from inside the zip without extracting it first: Windows would only pull out that one file, and the installer would stop with a "files are missing" message.
+3. **Double-click `install.bat`** in the extracted folder.
    - If Windows shows *"Windows protected your PC"*, click **More info**, then **Run anyway**. This appears for any script downloaded from the internet.
-   - You should hear *"Voice summaries are ready."*
+   - You should hear *"Voice summaries are ready."* With the Kokoro voice, this takes 10 to 15 seconds.
 4. When asked **"Would you like to choose a more natural voice now?"**, type **Y** and follow the prompts (see [Choosing a voice](#choosing-a-voice)). You can also skip this and do it later.
 5. **Close Claude Code completely and open it again.**
 
@@ -168,6 +173,7 @@ Everything lives in your user's Claude Code folder, `%USERPROFILE%\.claude\`:
 |---|---|
 | Voice stops after a few replies | Usually Claude has paused to ask your permission, which isn't a finished reply. Since version 1.1 you hear an alert for that. If not, check the log: each reply should have a `Stop:` line. |
 | No sound at all | Check your headphones are the default output in Windows sound settings, then run `install.bat` again to hear the test sound. Make sure you restarted Claude Code after installing. |
+| Windows sounds work, but the voice is silent | Windows keeps a separate volume and output device for each app, and the voice plays from PowerShell. Open **Settings → System → Sound → Volume mixer**, click **Reset** next to *"Reset sound devices and volumes for all apps"*, then run `check-voice.bat`. |
 | Still nothing after restarting | In Claude Code, type `/hooks` and check that a `Stop` hook mentioning `speak-summary.ps1` is listed. If not, run `install.bat` again. |
 | Installer says *"Could not find the claude command"* | This is only a note, not an error: the voice works without it. It's only needed for the rare reply with no recap. To add it, paste `irm https://claude.ai/install.ps1 \| iex` into PowerShell. |
 | It uses the robotic voice even though I picked another | Your chosen voice failed and the Windows voice filled in. The log says why, for example a wrong key, no credit or no internet. Run `choose-voice.bat` to fix it. |
@@ -175,6 +181,14 @@ Everything lives in your user's Claude Code folder, `%USERPROFILE%\.claude\`:
 | Kokoro takes long to start speaking | Kokoro runs on your own processor. Slower PCs need a few seconds per sentence. It starts speaking after the first sentence is ready. |
 | Azure error *"Subscription frozen due to inactivity"* | Your old Azure subscription is locked. Create a new Pay-As-You-Go subscription (the Free F0 Speech tier still costs nothing), ask Microsoft Support to unfreeze it, or use Kokoro instead. |
 | *"Windows protected your PC"* | Click **More info**, then **Run anyway**. |
+
+## Updating
+
+1. Download the zip from the [latest release](https://github.com/sid1707/claude-code-voice-summary/releases/latest) and extract it.
+2. Double-click `install.bat`. It replaces the old files, removes the old hooks before adding the new ones, and keeps your voice choice and the Kokoro voice model.
+3. Restart Claude Code.
+
+Then delete the old downloaded zips and folders, so you don't run an old installer by mistake. The [changelog](CHANGELOG.md) lists what changed in each version.
 
 ## Uninstall
 
@@ -189,11 +203,14 @@ Double-click **`uninstall.bat`**, then restart Claude Code. It removes the hook,
 
 ## Contributing
 
+Something not working? [Open an issue](https://github.com/sid1707/claude-code-voice-summary/issues/new/choose) and attach the report that `check-voice.bat` saves to your Desktop. It makes problems much quicker to find.
+
 Issues and pull requests are welcome, especially:
 
 - macOS and Linux support
 - more Kokoro languages
 - other free voice engines (for example Piper)
+- the same idea for other AI coding tools, such as Codex or Cursor
 
 ## Credits and licences
 
