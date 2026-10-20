@@ -59,7 +59,7 @@ Choose from four voices, including **Kokoro**, a free, open-source voice that so
 4. When asked **"Would you like to choose a more natural voice now?"**, type **Y** and follow the prompts (see [Choosing a voice](#choosing-a-voice)). You can also skip this and do it later.
 5. **Close Claude Code completely and open it again.**
 
-That's it. From now on, each time Claude Code finishes a reply, you'll hear a short summary.
+That's it. From now on, each time Claude Code finishes a reply, you'll hear a short summary. And if Claude stops part-way to ask your permission, you'll hear *"Claude is waiting for your permission to continue."*
 
 > Running `install.bat` again is safe. It updates the files and keeps your settings.
 
@@ -125,6 +125,7 @@ flowchart LR
    - For a long reply with no recap, it asks Claude Haiku for a quick summary using the `claude` command, if installed.
    - As a last resort, it reads the first couple of sentences.
    - Only one summary plays at a time.
+   - The same script also runs on the `Notification` event, so you hear a short alert when Claude stops part-way to ask your permission or for input. Claude Code doesn't count that pause as finishing, so no `Stop` summary would come.
 3. **[Skills](https://code.claude.com/docs/en/skills)** (`/voice-off`, `/voice-on`): mute and unmute by creating or deleting a small marker file.
 
 ### What gets installed where
@@ -133,7 +134,7 @@ Everything lives in your user's Claude Code folder, `%USERPROFILE%\.claude\`:
 
 | Location | What it is |
 |---|---|
-| `settings.json` | Gets one `Stop` hook entry and `"outputStyle": "Plain Words"`. Your other settings are kept, and a backup is saved next to it first (`settings.json.backup-<date>`). |
+| `settings.json` | Gets one `Stop` hook entry, one `Notification` hook entry (for permission and input alerts) and `"outputStyle": "Plain Words"`. Your other settings are kept, and a backup is saved next to it first (`settings.json.backup-<date>`). |
 | `output-styles\plain-words.md` | The Plain Words style |
 | `hooks\speak-summary.ps1` | The hook script |
 | `hooks\voice-engines.ps1` | Shared voice code (Kokoro, OpenAI, Azure, Windows) |
@@ -159,10 +160,13 @@ Everything lives in your user's Claude Code folder, `%USERPROFILE%\.claude\`:
 
 ## Troubleshooting
 
-**Where's the log?** Problems are written to `%USERPROFILE%\.claude\hooks\voice-summary.log`. Open it in Notepad. It usually says exactly what went wrong.
+**Quickest check:** double-click **`check-voice.bat`** in the downloaded folder. It plays a test summary, checks that everything is installed, and saves a report called `voice-summary-report.txt` to your Desktop (no keys are included). It changes nothing.
+
+**Where's the log?** Every summary and alert is recorded in `%USERPROFILE%\.claude\hooks\voice-summary.log`: what was spoken, where the text came from, which voice was used, and any problem. Open it in Notepad (press Windows key + R and paste `%USERPROFILE%\.claude\hooks`).
 
 | Problem | Fix |
 |---|---|
+| Voice stops after a few replies | Usually Claude has paused to ask your permission, which isn't a finished reply. Since version 1.1 you hear an alert for that. If not, check the log: each reply should have a `Stop:` line. |
 | No sound at all | Check your headphones are the default output in Windows sound settings, then run `install.bat` again to hear the test sound. Make sure you restarted Claude Code after installing. |
 | Still nothing after restarting | In Claude Code, type `/hooks` and check that a `Stop` hook mentioning `speak-summary.ps1` is listed. If not, run `install.bat` again. |
 | Installer says *"Could not find the claude command"* | This is only a note, not an error: the voice works without it. It's only needed for the rare reply with no recap. To add it, paste `irm https://claude.ai/install.ps1 \| iex` into PowerShell. |

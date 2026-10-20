@@ -226,6 +226,7 @@ function Invoke-VoiceSpeak([string]$text, $Config = $null, [switch]$NoFallback) 
     $cfg = $Config
     if (-not $cfg) { $cfg = Get-VoiceConfig }
     $engine = Get-CfgValue $cfg 'engine' 'windows'
+    $script:LastVoiceEngine = $engine
     if ($engine -ne 'windows') {
         try {
             if ($engine -eq 'kokoro') { Invoke-KokoroSpeech $text $cfg; return }
@@ -237,6 +238,7 @@ function Invoke-VoiceSpeak([string]$text, $Config = $null, [switch]$NoFallback) 
         } catch {
             if ($NoFallback) { throw }
             Write-VoiceLog ("$engine voice failed, used the Windows voice instead: " + $_.Exception.Message)
+            $script:LastVoiceEngine = "windows (after $engine failed)"
         }
     }
     Invoke-WindowsSpeech $text $cfg

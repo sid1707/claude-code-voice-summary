@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 - 2026-10-20
+
+- **Permission alerts**: you now hear "Claude is waiting for your permission to continue" when Claude stops part-way to ask your permission or for input. Before, these pauses were silent because they aren't a finished reply.
+- **Clearer log**: every summary and alert is now written to the log, with where the text came from and which voice spoke it, so it's easy to see what happened.
+- **`check-voice.bat`**: checks the set-up, plays a test summary and saves a report to your Desktop.
+
 ## 1.0.0 - 2026-10-19
 
 First public release.
